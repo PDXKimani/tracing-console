@@ -6,8 +6,7 @@ use std::sync::{Arc, RwLock};
 
 use protosocket::TcpSocketListener;
 use protosocket_messagepack::{MessagePackDecoder, MessagePackSerializer};
-use protosocket_rpc::Message;
-use protosocket_rpc::server::{ConnectionService, RpcResponder, SocketRpcServer, SocketService};
+use protosocket_rpc::server::{ConnectionService, RpcKind, SocketRpcServer, SocketService};
 use tokio::sync::watch;
 use tracing::metadata::LevelFilter;
 use tracing_cache::{ChanceHandle, EnabledPredicate, LevelHandle, SpanCache, SpanRecord};
@@ -179,15 +178,14 @@ impl<P: EnabledPredicate> ConnectionState<P> {
 }
 
 impl<P: EnabledPredicate> ConnectionService for ConnectionState<P> {
+    type Codec = ServerCodec;
     type Request = Request;
     type Response = Response;
+    type UnaryFutureType = std::future::Ready<Response>;
+    type StreamType = std::pin::Pin<Box<dyn futures_core::Stream<Item = Response> + Send>>;
 
     #[allow(clippy::expect_used, reason = "poisoned lock")]
-    fn new_rpc(&mut self, msg: Request, responder: RpcResponder<'_, Response>) {
-        // Every Response must echo the request id so the client's
-        // completion registry (keyed by id) routes it back to the
-        // right pending RPC — see `Response::with_id`.
-        let request_id = msg.message_id();
+    fn new_rpc(&mut self, msg: Request) -> RpcKind<Self::UnaryFutureType, Self::StreamType> {
         match msg.body {
             RequestBody::StartStream => {
                 self.state
@@ -206,47 +204,52 @@ impl<P: EnabledPredicate> ConnectionService for ConnectionState<P> {
                 let base = self.base;
                 let level_rx = self.level_bus.subscribe_level();
                 let chance_rx = self.level_bus.subscribe_chance();
-                tokio::spawn(responder.stream(span_stream(
-                    cache, state, base, level_rx, chance_rx, request_id,
-                )));
+                // The connection drives this stream, and only polls it when it can
+                // send. A stalled console lags the span subscriber (which drops
+                // batches) instead of buffering spans without bound.
+                RpcKind::Streaming(Box::pin(span_stream(
+                    cache, state, base, level_rx, chance_rx,
+                )))
             }
             RequestBody::StopStream => {
                 self.state
                     .write()
                     .expect("lock must not be poisoned")
                     .streaming = false;
-                responder.immediate(Response::ack().with_id(request_id));
+                RpcKind::Unary(std::future::ready(Response::ack()))
             }
             RequestBody::SetLevel(level) => {
                 self.state
                     .write()
                     .expect("lock must not be poisoned")
                     .min_level = Some(level);
-                responder.immediate(Response::ack().with_id(request_id));
+                RpcKind::Unary(std::future::ready(Response::ack()))
             }
             RequestBody::SetCacheLevel(filter) => {
                 self.level_bus.set_level(filter);
-                responder.immediate(Response::ack().with_id(request_id));
+                RpcKind::Unary(std::future::ready(Response::ack()))
             }
             RequestBody::SetCacheChance(pct) => {
                 self.level_bus.set_chance(pct);
-                responder.immediate(Response::ack().with_id(request_id));
+                RpcKind::Unary(std::future::ready(Response::ack()))
             }
             RequestBody::SetSamplingRate(rate) => {
                 if !(0.0..=1.0).contains(&rate) || rate.is_nan() {
-                    responder.immediate(
+                    return RpcKind::Unary(std::future::ready(
                         Response::error(format!("sampling rate {rate} out of range [0.0, 1.0]"))
-                            .with_id(request_id),
-                    );
-                    return;
+                            ,
+                    ));
                 }
                 self.state
                     .write()
                     .expect("lock must not be poisoned")
                     .sampling_rate = rate;
-                responder.immediate(Response::ack().with_id(request_id));
+                RpcKind::Unary(std::future::ready(Response::ack()))
             }
-            RequestBody::Noop => {}
+            // Noop previously sent no response at all, which leaked the rpc in the
+            // client's completion registry. Cancelled answers with a cancellation,
+            // which retires it.
+            RequestBody::Noop => RpcKind::Cancelled,
         }
     }
 }
@@ -266,19 +269,18 @@ fn span_stream<P: EnabledPredicate>(
     base: TimeBase,
     mut level_rx: watch::Receiver<WireLevelFilter>,
     mut chance_rx: watch::Receiver<f64>,
-    request_id: u64,
 ) -> impl futures_core::Stream<Item = Response> {
     async_stream::stream! {
         // Identify the host crate first so the client can spot a
         // version mismatch before consuming any spans.  `CARGO_PKG_VERSION`
         // is the workspace-pinned version, same as the client binary's.
-        yield Response::server_info(env!("CARGO_PKG_VERSION")).with_id(request_id);
+        yield Response::server_info(env!("CARGO_PKG_VERSION"));
         // Push current level + chance next so the client renders
         // its switcher / chance UI before any spans land.
         let initial_level = *level_rx.borrow_and_update();
-        yield Response::cache_level(initial_level).with_id(request_id);
+        yield Response::cache_level(initial_level);
         let initial_chance = *chance_rx.borrow_and_update();
-        yield Response::cache_chance(initial_chance).with_id(request_id);
+        yield Response::cache_chance(initial_chance);
 
         // Register a subscriber — the driver fans every closed span
         // into this receiver in commit (close-time) order, replacing
@@ -294,12 +296,12 @@ fn span_stream<P: EnabledPredicate>(
                 changed = level_rx.changed() => {
                     if changed.is_err() { break; }
                     let lvl = *level_rx.borrow_and_update();
-                    yield Response::cache_level(lvl).with_id(request_id);
+                    yield Response::cache_level(lvl);
                 }
                 changed = chance_rx.changed() => {
                     if changed.is_err() { break; }
                     let pct = *chance_rx.borrow_and_update();
-                    yield Response::cache_chance(pct).with_id(request_id);
+                    yield Response::cache_chance(pct);
                 }
                 batch = span_rx.next_batch() => {
                     let Some(batch) = batch else { break };
@@ -324,7 +326,7 @@ fn span_stream<P: EnabledPredicate>(
                         if !sampling_passes(&record, sampling_rate) {
                             continue;
                         }
-                        yield Response::span(span_to_wire(&record, base)).with_id(request_id);
+                        yield Response::span(span_to_wire(&record, base));
                     }
                 }
             }
@@ -371,11 +373,10 @@ struct Service<P: EnabledPredicate> {
 }
 
 impl<P: EnabledPredicate> SocketService for Service<P> {
-    type Codec = ServerCodec;
     type ConnectionService = ConnectionState<P>;
     type SocketListener = TcpSocketListener;
 
-    fn codec(&self) -> Self::Codec {
+    fn codec(&mut self) -> ServerCodec {
         (
             MessagePackSerializer::default(),
             MessagePackDecoder::default(),
@@ -383,7 +384,7 @@ impl<P: EnabledPredicate> SocketService for Service<P> {
     }
 
     fn new_stream_service(
-        &self,
+        &mut self,
         _stream: &<Self::SocketListener as protosocket::SocketListener>::Stream,
     ) -> Self::ConnectionService {
         ConnectionState::new(Arc::clone(&self.cache), self.base, self.level_bus.clone())
