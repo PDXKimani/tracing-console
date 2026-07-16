@@ -235,10 +235,9 @@ impl<P: EnabledPredicate> ConnectionService for ConnectionState<P> {
             }
             RequestBody::SetSamplingRate(rate) => {
                 if !(0.0..=1.0).contains(&rate) || rate.is_nan() {
-                    return RpcKind::Unary(std::future::ready(
-                        Response::error(format!("sampling rate {rate} out of range [0.0, 1.0]"))
-                            ,
-                    ));
+                    return RpcKind::Unary(std::future::ready(Response::error(format!(
+                        "sampling rate {rate} out of range [0.0, 1.0]"
+                    ))));
                 }
                 self.state
                     .write()
