@@ -1061,9 +1061,9 @@ checksum = "09edd9e8b54e49e587e4f6295a7d29c3ea94d469cb40ab8ca70b288248a81db2"
 
 [[package]]
 name = "level-runtime"
-version = "1.1.0"
+version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69b95458f3585ef6b63f9c62f82c01f82440e3683511e68953e71713e98cfb5e"
+checksum = "1070e0ea5ded9b9eae5f23487c8e14a0a4e55445b7535b1a35bfa18afabe8389"
 dependencies = [
  "futures",
  "log",
@@ -1480,9 +1480,9 @@ dependencies = [
 
 [[package]]
 name = "protosocket"
-version = "1.1.0"
+version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5979486872ced8e0f65f78edae72552700c33aa4e86818dc6751097f53fec3e0"
+checksum = "34d599e0dbef603d5d0c22fd37763911577be916fe48b5e67eab98c3c38339d4"
 dependencies = [
  "bytes",
  "futures",
@@ -1497,9 +1497,9 @@ dependencies = [
 
 [[package]]
 name = "protosocket-messagepack"
-version = "1.1.0"
+version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6050a1161baa407e71e2990c933bfeb0319a8b1c343383657ded5f1515e016a5"
+checksum = "aea87e471bc2296106f3f8bdc258aa77aa91956b69a7c663e331eff00a48264d"
 dependencies = [
  "bytes",
  "log",
@@ -1511,9 +1511,9 @@ dependencies = [
 
 [[package]]
 name = "protosocket-rpc"
-version = "1.1.0"
+version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce64d6772a2d4a0850dddcb109f4b6084d5115758399c2a731a712f12ced0c2b"
+checksum = "74a6163594cf1611a6a99477616fcb78002fd97fd2eb942f0f52457c162d5975"
 dependencies = [
  "ahash",
  "futures",
@@ -2001,9 +2001,9 @@ dependencies = [
 
 [[package]]
 name = "spillway"
-version = "1.1.0"
+version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "641398d3c300e50f89d66d9d67fefd909f83e01b26e5250ea74ae19d44a7f41b"
+checksum = "ce09bfe26d8082959a75c7eab74b0fdc03c4de733bdd1bff0dd208099e9d06dc"
 dependencies = [
  "futures",
  "log",

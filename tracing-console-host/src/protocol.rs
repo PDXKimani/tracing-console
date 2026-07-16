@@ -326,17 +326,6 @@ impl Response {
             version: version.into(),
         }))
     }
-    /// Set the message id and return `self` so the call chains.  The
-    /// server must echo the request id on every response so the
-    /// client's completion registry (keyed by id) can route the
-    /// response back to the right pending RPC.  protosocket-rpc does
-    /// NOT auto-assign ids — both endpoints must do it manually, and
-    /// in particular an RPC at id=0 will clobber any other RPC at
-    /// id=0 on the same client connection.
-    pub fn with_id(mut self, id: u64) -> Self {
-        self.id = id;
-        self
-    }
 }
 
 impl Message for Response {
