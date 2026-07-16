@@ -20,8 +20,8 @@ panic_in_result_fn = "deny"
 todo = "deny"
 
 [workspace.dependencies]
-tracing-cache                   = { path = "tracing-cache", version = "0.1.0" }
-tracing-console-host            = { path = "tracing-console-host", version = "0.2.0" }
+tracing-cache                   = { path = "tracing-cache", version = "^0" }
+tracing-console-host            = { path = "tracing-console-host", version = "^0" }
 
 async-stream                    = { version = "0.3" }
 chrono                          = { version = "0.4", default-features = false, features = ["clock", "std"] }
