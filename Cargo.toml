@@ -3,7 +3,7 @@ resolver = "2"
 members = ["tracing-console", "tracing-cache", "tracing-console-host"]
 
 [workspace.package]
-version = "0.1.4"
+version = "0.2.0"
 authors = ["kvc0"]
 edition = "2024"
 license = "MIT OR Apache-2.0"
@@ -21,7 +21,7 @@ todo = "deny"
 
 [workspace.dependencies]
 tracing-cache                   = { path = "tracing-cache", version = "0.1.0" }
-tracing-console-host            = { path = "tracing-console-host", version = "0.1.0" }
+tracing-console-host            = { path = "tracing-console-host", version = "0.2.0" }
 
 async-stream                    = { version = "0.3" }
 chrono                          = { version = "0.4", default-features = false, features = ["clock", "std"] }
